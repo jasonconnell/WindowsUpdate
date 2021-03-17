@@ -283,7 +283,147 @@ Param (
     End{}
 }
 
+
+Function Get-Win10Logs {
+<#
+.SYNOPSIS
+    This function will collect all Windows 10 update logs to a centralized location.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/15/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param (
+        [string]$Path,
+        [switch]$Zip
+    )
+
+    Begin{
+        $UpdateLogs = @(
+            'C:\Windows\Panther\Setupact.log',
+            'C:\Windows\panther\setuperr.log',
+            'C:\Windows\inf\setupapi.app.log',
+            'C:\Windows\inf\setupapi.dev.log',
+            'C:\Windows\panther\PreGatherPnPList.log',
+            'C:\Windows\panther\PostApplyPnPList.log',
+            'C:\Windows\panther\miglog.xml',
+            'C:\$Windows.~BT\Sources\panther\setupact.log',
+            'C:\$Windows.~BT\Sources\panther\miglog.xml',
+            'C:\Windows\setupapi.log',
+            'C:\Windows\Logs\MoSetup\BlueBox.log',
+            'C:\Windows\panther\setupact.log',
+            'C:\Windows\panther\miglog.xml',
+            'C:\Windows\inf\setupapi.app.log',
+            'C:\Windows\inf\setupapi.dev.log',
+            'C:\Windows\panther\PreGatherPnPList.log',
+            'C:\Windows\panther\PostApplyPnPList.log'
+            'C:\Windows\memory.dmp',
+            'C:\$Windows.~BT\Sources\panther\setupact.log',
+            'C:\$Windows.~BT\Sources\panther\miglog.xml',
+            'C:\$Windows.~BT\sources\panther\setupapi\setupapi.dev.log',
+            'C:\$Windows.~BT\sources\panther\setupapi\setupapi.app.log',
+            'C:\Windows\memory.dmp',
+            'C:\$Windows.~BT\Sources\Rollback\setupact.log',
+            'C:\$Windows.~BT\Sources\Rollback\setupact.err',
+            'C:\Windows\Panther\UnattendGC\diagerr.xml',
+            'C:\Windows\Panther\UnattendGC\diagwrn.xml',
+            'C:\Windows\Panther\UnattendGC\setupact.log',
+            'C:\Windows\Panther\UnattendGC\setuperr.log',
+            'C:\Windows\Panther\setup.etl'
+        )
+
+        If ([string]::IsNullOrEmpty($Path)){
+            Write-Verbose "No path provided using current directory"
+            $Path = (Get-Location).Path 
+        }
+
+        $Path = [string]::Concat($Path, '\Win10UpdateLogs')
+        Write-Verbose "Setting path equal to $($Path)"
+    }
+
+    Process{
+
+        Try{
+            New-Item -Path $Path -ItemType Directory -Force | Out-Null
+        }
+
+        Catch{
+            Write-Error "ERROR: Line $($LINENUMB): Failed to create directory. $($Error[0])"
+        }
+
+        Try{
+            foreach ($log in $UpdateLogs){
+                If (Test-path $log){
+                    Write-Verbose "Copying file $($log)"
+                    Copy-Item $log -Destination $Path -Force | Out-Null
+                }
+            }
+        }
+
+        Catch{
+            Write-Error "ERROR: Line $($LINENUM): Failed to copy all Success logs. $($Error[0])"
+        }
+    }
+
+    End{
+        Write-Verbose "Finished copying all logs."
+
+        If ($Zip){
+            Compress-Archive -Path $Path -DestinationPath "$($Path)\Win10UpdateLogs.zip" -Force | Out-Null
+        }
+    }
+}
+
+
+Function Get-SetupDiag {
+<#
+.SYNOPSIS
+    This function will attempt to download the Windows 10 setupdiag tool and scan for errors.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/16/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+    #https://go.microsoft.com/fwlink/?linkid=870142
+
+    Begin{}
+
+    Process{}
+
+    End{}
+}
+
+
+Function Get-Windows10EventLogs {
+    $events = Get-WinEvent -FilterHashtable @{LogName="Application";ID="1001";Data="WinSetupDiag02"}
+$event = [xml]$events[0].ToXml()
+$event.Event.EventData.Data
+}
+
 Function Get-CurrentLineNumber {
     $MyInvocation.ScriptLineNumber
 }
 Set-Alias -name LINENUM -value Get-CurrentLineNumber -WhatIf:$False -Confirm:$False -Scope Script
+
+
+$PublicFunctions=@(((@"
+Get-SetupDiag
+Get-Win10Logs
+Update-Windows10
+Get-DownloadSpeed
+Backup-UserProfile
+Get-SystemHashTable
+Get-DiskSpace
+"@) -replace "[`r`n,\s]+",',') -split ',')
