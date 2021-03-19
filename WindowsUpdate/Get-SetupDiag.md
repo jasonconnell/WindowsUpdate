@@ -1,16 +1,16 @@
-# Get-DiskSpace
+# Get-SetupDiag
 
 ## SYNOPSIS
-This function will query the system drive and report back the free space in GB.
+This function will download and execute the Windows 10 Setup diagnostics tool. This can be used to identify any errors that may exist with the installation. More information can be found here [Micosoft_DiagToll](https://docs.microsoft.com/en-us/windows/deployment/upgrade/setupdiag)
 
 ## SYNTAX
 
 ```
-Get-DiskSpace
+Get-SetupDiag
 ```
 
 ## DESCRIPTION
-This function will query the system drive and report back the free space in GB.
+This function will download the SetupDiag tool and look for errors with a failed installation.
 
 ## EXAMPLES
 

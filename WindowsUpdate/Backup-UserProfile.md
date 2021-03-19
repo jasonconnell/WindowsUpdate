@@ -1,16 +1,16 @@
-# Get-DiskSpace
+# Backup-UserProfile
 
 ## SYNOPSIS
-This function will query the system drive and report back the free space in GB.
+This function will create a backup of all local user profiles.
 
 ## SYNTAX
 
 ```
-Get-DiskSpace
+Backup-UserProfile
 ```
 
 ## DESCRIPTION
-This function will query the system drive and report back the free space in GB.
+This function will create a backup of all local user profiles.
 
 ## EXAMPLES
 

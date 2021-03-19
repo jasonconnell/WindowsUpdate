@@ -1,16 +1,16 @@
-# Get-DiskSpace
+# Get-DownloadSpeed
 
 ## SYNOPSIS
-This function will query the system drive and report back the free space in GB.
+This function will download some test data to determine the systems download speeds.
 
 ## SYNTAX
 
 ```
-Get-DiskSpace
+Get-DownloadSpeed
 ```
 
 ## DESCRIPTION
-This function will query the system drive and report back the free space in GB.
+This function will download some test data to determine the systems download speeds.
 
 ## EXAMPLES
 

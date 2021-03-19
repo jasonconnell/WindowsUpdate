@@ -1,17 +1,16 @@
-# Get-DiskSpace
+# Get-Windows10EventLogs
 
 ## SYNOPSIS
-This function will query the system drive and report back the free space in GB.
+This function search Windows event logs for known failure ID's.
 
 ## SYNTAX
 
 ```
-Get-DiskSpace
+Get-Windows10EventLogs
 ```
 
 ## DESCRIPTION
-This function will query the system drive and report back the free space in GB.
-
+This function search Windows event logs for known failure ID's.
 ## EXAMPLES
 
 ## PARAMETERS

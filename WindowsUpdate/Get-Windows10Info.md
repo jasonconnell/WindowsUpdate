@@ -1,7 +1,3 @@
----
-schema: 2.0.0
----
-
 # Get-Windows10Info
 
 ## SYNOPSIS
