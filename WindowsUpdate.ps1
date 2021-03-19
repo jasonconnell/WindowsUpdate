@@ -124,7 +124,7 @@ Param ()
 }#End Function Get-DiskSpace
 
 
-Function Get-SystemHashTable{
+Function Get-Windows10Info{
 <#
 .SYNOPSIS
     This function will build an object to store key information.
@@ -185,7 +185,7 @@ Param ()
         }
         return $SystemHash
     }#End End
-}#End Function Get-SystemHashTable
+}#End Function Get-Windows10Info
 
 
 Function Backup-UserProfile{
