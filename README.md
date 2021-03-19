@@ -14,7 +14,7 @@ This powershell module attempts to ease the pain of Windows 10 feature updates b
 
 [Update-Windows10](WindowsUpdate/Update-Windows10.md)
 
-[Get-Windows10Logs](WindowsUpdate/Get-Windows10Logs.md)
+[Get-Windows10Logs](WindowsUpdate/Get-Win10Logs.md)
 
 [Get-SetupDiag](WindowsUpdate/Get-SetupDiag.md)
 
