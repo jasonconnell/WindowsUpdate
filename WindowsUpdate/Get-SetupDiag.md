@@ -1,7 +1,7 @@
 # Get-SetupDiag
 
 ## SYNOPSIS
-This function will download and execute the Windows 10 Setup diagnostics tool. This can be used to identify any errors that may exist with the installation. More information can be found here [Micosoft_DiagToll](https://docs.microsoft.com/en-us/windows/deployment/upgrade/setupdiag)
+This function will download and execute the Windows 10 Setup diagnostics tool. This can be used to identify any errors that may exist with the installation. More information can be found here [Micosoft_DiagTool](https://docs.microsoft.com/en-us/windows/deployment/upgrade/setupdiag)
 
 ## SYNTAX
 
