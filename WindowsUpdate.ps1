@@ -238,19 +238,34 @@ Function Update-Windows10 {
     Purpose/Change: Initial script development
 #>
 
+
 [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
 Param (
     [string]$UpdateTool = 'https://download.microsoft.com/download/2/b/b/2bba292a-21c3-42a6-8123-98265faff0b6/Windows10Upgrade9252.exe',
     [switch]$BackupUserProfile,
-    [int]$FreeSpaceThreshold = 20
+    [int]$FreeSpaceThreshold = 20,
+    [switch]$ISO,
+    [string]$LogPath,
+    [switch]$NoReboot
 )
 
     Begin{
         if ((Get-DiskSpace) -ge $FreeSpaceThreshold){
             Write-Verbose "System disk check passed. Continuing with update"
         }Else{
-            Write-Error "ERROR: Line $($LINENUM): Not enough free disk space to continue."
-            return
+            Write-Error "ERROR: Line $($LINENUM): Not enough free disk space to continue." -ErrorAction Stop
+        }
+
+        if (-Not([string]::IsNullOrEmpty($LogPath))){
+            Write-Verbose "New log path $($LogPath) defined. Using destination for logging"
+            $CopyArg = [string]::Concat("/copylogs ", $LogPath)
+            if(-Not(Test-Path $LogPath)){
+                New-Item -Path $LogPath -ItemType Directory -Force | Out-Null
+            }   
+        }
+
+        if ($NoReboot){
+            $RebootArg = "/noreboot"
         }
 
         if ($BackupUserProfile){
@@ -278,6 +293,28 @@ Param (
         Catch{
             Write-Error "ERROR: Line ($($LINENUM): Failed to download file $($UpdateTool) $($Error[0])" -ErrorAction Stop
         }
+        Try{
+            if (Test-Path ($ENV:TEMP + "\Windows10Update\updater.exe")){
+                Write-Verbose "Update utility successfully downloaded"
+                $InstallArg = "/quietinstall /skipeula /auto upgrade $($CopyArg) $($RebootArg)"
+                Write-Verbose "Issuing install command Update.exe $($InstallArg)"
+                Try{
+                    Write-Verbose "Invoking install now. This process can take several hours to complete"
+                    Start-Process -FilePath ($ENV:TEMP + "\Windows10Update\updater.exe") -ArgumentList $InstallArg
+                }
+
+                Catch{
+                    Write-Error "ERROR: Line $($LINENUM): Failed to start install process. Error: $($Error[0])"
+                }
+            }else{
+                Write-Error "ERROR: Line $($LINENUM): Failed to download Windows 10 Update Assistant"
+            }
+        }
+        
+        Catch{
+            Write-Error "ERROR: Line $($LINENUM): An error occured while attempting to setup installer. ERROR: $($Error[0])"
+        }
+
     }
 
     End{}
@@ -398,7 +435,15 @@ Function Get-SetupDiag {
 #>
     #https://go.microsoft.com/fwlink/?linkid=870142
 
-    Begin{}
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param ()
+
+    Begin{
+        Try{
+            if ($true){}
+        }
+        Catch{}
+    }
 
     Process{}
 
