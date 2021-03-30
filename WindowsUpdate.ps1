@@ -433,7 +433,7 @@ Function Get-SetupDiag {
 .LINK
     https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
 #>
-    #https://go.microsoft.com/fwlink/?linkid=870142
+
 
     [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
     Param ()
@@ -457,11 +457,171 @@ $event = [xml]$events[0].ToXml()
 $event.Event.EventData.Data
 }
 
+Function Get-UpgradeHardwareCompatibility {
+<#
+.SYNOPSIS
+    This function will attempt to locate Software that may be incompatible with the upgrade.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/30/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param ()
+
+    Begin{}#End Begin
+
+    Process{}#End Process
+
+    End{}#End End
+
+}#End Function Get-UpgradeHardwareCompatibility
+
+
+Function Get-UpgradeSoftwareCompatibility {
+<#
+.SYNOPSIS
+    This function will attempt to locate Software that may be incompatible with the upgrade.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/30/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param ()
+
+    Begin{
+        $ScanDir = "$($env:SystemDrive)\`$WINDOWS.~BT\Sources\panther\compat*"
+    }#End Begin
+
+    Process{
+        Write-Verbose "Gathering incompatible software"
+
+        Try {
+            [xml]$CompatReport = Get-ChildItem -Path $ScanDir -ErrorAction Stop |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1 |
+            Get-Content
+
+            $IncompatibleSoftware = $CompatReport.Compatreport.Programs | ForEach-Object {$_.Program.Name}
+        }
+
+        Catch{
+            Write-Verbose "Unable to identify any incompatible software"
+            break
+        }
+    }#End Process
+
+    End{
+        If ($IncompatibleSoftware.count -gt 0) {
+            Write-Error "ERROR: Incompatable Software found: $([string]::Join(", ", $IncompatibleSoftware))"
+        } Else {
+            Write-Verbose "No incompatible software found"
+        }
+    }#End End
+
+}#End Function Get-UpgradeSoftwareCompatibility
+Function Test-WindowsLicense{
+<#
+.SYNOPSIS
+    This function will use the slmgr.vbs to determine if the system is licensed.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/30/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param ()
+
+    Begin{
+        $LicenseStatus = $false
+        $SlmgrPath = $ENV:SystemDrive + "\Windows\System32\slmgr.vbs"
+    }#End Begin
+
+    Process{
+        Write-Verbose "Determining if Windows is licensed"
+        if ((Cscript "$($SlmgrPath) "/dli ) -match "Licensed"){
+            $LicenseStatus = $true
+        } Else{
+            Write-Error "ERROR: Line $($LINENUMB): Windows is not currently licnesed. License is required to continue."
+        }
+    }#End Process
+
+    End{
+        Return $LicenseStatus
+    }#End End
+
+}#End Funciton Test-WindowsLicense
+
 Function Get-CurrentLineNumber {
     $MyInvocation.ScriptLineNumber
 }
 Set-Alias -name LINENUM -value Get-CurrentLineNumber -WhatIf:$False -Confirm:$False -Scope Script
 
+Function New-LogMessage{
+<#
+.SYNOPSIS
+    This function will record all log messages.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/30/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+    [CmdletBinding()]
+    Param(
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Message,
+ 
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('Information','Warning','Error')]
+        [string]$Severity = 'Information'
+    )
+
+    Begin{
+        
+        $LogPath = $ENV:SystemDrive + "\Windows\Temp\Windows10FeatureUpdate.log"
+        Write-Output $LogPath
+
+        if (-NOT(Test-Path -Path $LogPath)){
+            New-Item -Path $LogPath -Force | Out-Null
+        }
+    }#End Begin
+
+    Process{
+        $date = Get-Date -Format "dd-MM-yyyy HH:mm"
+        $LogFormat = "$($date)  $($Severity)  $($message)"
+        
+    }#End Process
+
+    End{
+        Out-File -FilePath $LogPath -InputObject $LogFormat -Append
+    }#End End
+}#End Function New-LogMessage
 
 $PublicFunctions=@(((@"
 Get-SetupDiag
