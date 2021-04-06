@@ -111,14 +111,14 @@ Param ()
     }#End Begin
 
     Process{
-        Write-Debug "Getting System Drive $($SystemDrive) information"
+        New-LogMessage -Message "Getting System Drive $($SystemDrive) information" -Severity Information
         $DriveInfo = get-WmiObject win32_logicaldisk -Filter "DeviceID='$($SystemDrive)'"
     }#End Process
 
     End{
         $FreeSpace = [Math]::Round($DriveInfo.FreeSpace / 1Gb)
         $DiskSpacePercent = [Math]::Round(($DriveInfo.FreeSPace / $DriveInfo.Size) * 100)
-        Write-Verbose "System drive currently has $($FreeSpace) GB free ($($DiskSpacePercent)%)"     
+        New-LogMessage -Message "System drive currently has $($FreeSpace) GB free ($($DiskSpacePercent)%)" -Severity Information
         return $FreeSpace 
     }#End End
 }#End Function Get-DiskSpace
@@ -225,6 +225,128 @@ Function Get-DownloadSpeed{
 
 [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
 Param ()    
+}
+
+
+Function Update-Windows10Iso {
+<#
+.SYNOPSIS
+    This function will preform the windows 10 update using a provided ISO.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  4/5/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [string]$ISOPath,
+        [switch]$BackupUserProfile,
+        [int]$FreeSpaceThreshold = 20,
+        [string]$LogPath,
+        [switch]$NoReboot
+        )
+
+
+        Begin{
+            New-LogMessage -Message "Begining validation of machines eligibility to update." -Severity Information
+            if ((Get-DiskSpace) -ge $FreeSpaceThreshold){
+                New-LogMessage -Message "System disk check passed. Continuing with update" -Severity Information
+            }Else{
+               New-LogMessage -Message "ERROR: Line $($LINENUM): Not enough free disk space to continue." -Severity Error
+            }
+    
+            if (-Not([string]::IsNullOrEmpty($LogPath))){
+                New-LogMessage "New log path $($LogPath) defined. Using destination for logging" -Severity Information
+                $CopyArg = [string]::Concat("/copylogs ", $LogPath)
+                if(-Not(Test-Path $LogPath)){
+                    New-Item -Path $LogPath -ItemType Directory -Force | Out-Null
+                }   
+            }
+    
+            if ($NoReboot){
+                New-LogMessage -Message "No Reboot Argument set to True" -Severity Information
+                $RebootArg = "/noreboot"
+            }
+    
+            if ($BackupUserProfile){
+                New-LogMessage -Message "User Profile Backup switch set to true. Starting backup of profile" -Severity Information
+                Backup-UserProfile
+            }Else{
+                New-LogMessage -Message "User Profile Backup switch set to false. Skipping backup of profile" -Severity Information
+            }
+
+            if (-Not(Test-WindowsLicense)){
+                New-LogMessage -Message "Stopping script due to missing licnese." -Severity Error -ErrorAction Stop
+            }
+        }#End Begin
+
+        Process{
+            New-LogMessage -Message "Begining process of updating Windows 10." -Severity Information
+
+            If (Test-Path -Path $ISOPath){
+                If ((Get-ItemProperty $ISOPath).Extension -eq '.iso'){
+                    New-LogMessage -Message "ISO file successfully detected" -ErrorAction SilentlyContinue
+                    $FileName = (Get-ItemProperty $ISOPath).Name
+                } Else{
+                    New-LogMessage -Message "File path $($ISOPath) is not using the correct file format. Looking for .iso" -Severity Error -ErrorAction Stop
+                }
+               
+            } Else {
+                New-LogMessage -Message "Failed to detect ISO file $($ISOPath). Ensure file exists" -Severity Error -ErrorAction Stop
+            }
+
+            Try{
+                New-LogMessage -Message "Copying $($ISOPath) to $($ENV:Systemdrive)\Windows\Temp" -Severity Information
+                #Copy-Item -Path $ISOPath -Destination "$($ENV:Systemdrive)\Windows\Temp" -Force -ErrorAction Stop
+            }
+
+            Catch{
+                New-LogMessage -Message "Failed to copy $($ISOPath)" -Severity Error -ErrorAction Stop
+            }
+
+            Try{
+                New-LogMessage -Message "Mounting ISO imange." -Severity Information
+                $mountResult = Mount-DiskImage -ImagePath "$($ENV:Systemdrive)\Windows\Temp\$($FileName)"  -Passthru
+                $MountDriveLetter = ($mountResult | Get-Volume).DriveLetter
+                New-LogMessage -Message "Successfully Mounted ISO to $($MountDriveLetter):\" -Severity Information
+            }
+
+            Catch{
+                New-LogMessage -Message "Failed to mount ISO image" -Severity Error -ErrorAction Stop
+            }
+
+            New-LogMessage -Message "Creating temp directory $($ENV:Systemdrive)\Windows\Temp\Windows10Feature" -Severity Information
+            New-Item -Path "$($ENV:Systemdrive)\Windows\Temp\Windows10Feature" -ItemType Directory -Force -ErrorAction Stop | Out-Null
+
+            If (Test-Path -Path "$($ENV:Systemdrive)\Windows\Temp\Windows10Feature"){
+                Try{
+                    foreach ($file in (Get-ChildItem -Path "$($MountDriveLetter):\")){
+                        New-LogMessage -Message "Copying file $($File.FullName)" -Severity Information
+                        Copy-Item -Path $file.FullName -Destination "$($ENV:Systemdrive)\Windows\Temp\Windows10Feature" -Force -Recurse
+                    }
+                }
+
+                Catch{
+                    New-LogMessage -Message "Failed to copy ISO contents to Temp drive $($ENV:Systemdrive)\Windows\Temp\Windows10Feature $($Error[0])" -Severity Error -ErrorAction Stop
+                }
+            } Else{
+                New-LogMessage -Message "Temp Directory not detected. Exiting script." -Severity Error -ErrorAction Stop
+            }
+
+
+
+            
+        }#End Begin
+
+        End{}#End End
+
 }
 
 Function Update-Windows10 {
@@ -452,20 +574,50 @@ Function Get-SetupDiag {
 
 
 Function Get-Windows10EventLogs {
-    $events = Get-WinEvent -FilterHashtable @{LogName="Application";ID="1001";Data="WinSetupDiag02"}
-$event = [xml]$events[0].ToXml()
-$event.Event.EventData.Data
+<#
+.SYNOPSIS
+    This function will search through the event log for known upgrade events.
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  3/31/2021
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+    [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
+    Param ()
+
+    Begin{
+        Write-Verbose "Starting search for upgrade event logs."
+    }#End Begin
+
+    Process{
+        Try{
+            $events = Get-WinEvent -FilterHashtable @{LogName="Application";ID="1001";Data="WinSetupDiag02"}
+            $eventlogs = [xml]$events[0].ToXml()
+        }
+
+        Catch{
+            Write-Error "ERROR: Line $($LINEUM): Failed to retrieve event logs."
+        }
+    }#End Process
+
+    End{
+        $eventlogs.Event.EventData.Data
+    }#End End
 }
 
 Function Get-UpgradeHardwareCompatibility {
 <#
 .SYNOPSIS
-    This function will attempt to locate Software that may be incompatible with the upgrade.
+    This function will attempt to locate Hardware that may be incompatible with the upgrade.
 
 .NOTES
     Version:        1.0
     Author:         Jason Connell
-    Creation Date:  3/30/2021
+    Creation Date:  3/31/2021
     Purpose/Change: Initial script development
     
 .LINK
@@ -475,11 +627,42 @@ Function Get-UpgradeHardwareCompatibility {
     [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
     Param ()
 
-    Begin{}#End Begin
+    Begin{
+        $ScanDir = "$($env:SystemDrive)\`$WINDOWS.~BT\Sources\panther\compat*"
+    }#End Begin
 
-    Process{}#End Process
+    Process{
+        Write-Verbose "Gathering hardware compatibility information"
 
-    End{}#End End
+        Try{
+            [xml]$compatreport = Get-ChildItem $ScanDir -ErrorAction Stop |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1 |
+            Get-Content
+
+            $hw_issues = @()
+
+            $compatreport.Compatreport.Hardware.HardwareItem |
+            ForEach-Object {
+                If ($_.CompatibilityInfo.BlockingType -eq "Hard") {
+                    $hw_issues += $_.HartwareType
+                }
+            }
+        }
+
+        Catch{
+            Write-Verbose "Unable to identify any incompatible hardware"
+            break
+        }
+    }#End Process
+
+    End{
+        If ($hw_issues.count -gt 0) {
+            Write-Error "ERROR: Incompatable Hardware found: $([string]::Join(", ", $hw_issues))"
+        } Else {
+            Write-Verbose "No hardware compatibility issues found"
+        }
+    }#End End
 
 }#End Function Get-UpgradeHardwareCompatibility
 
@@ -557,11 +740,12 @@ Function Test-WindowsLicense{
     }#End Begin
 
     Process{
-        Write-Verbose "Determining if Windows is licensed"
+        New-LogMessage -Message "Determining if Windows is licensed" -Severity Information
         if ((Cscript "$($SlmgrPath) "/dli ) -match "Licensed"){
             $LicenseStatus = $true
+            New-LogMessage -Message "Windows is Activly Licensed. Continuing with installation." -Severity Information
         } Else{
-            Write-Error "ERROR: Line $($LINENUMB): Windows is not currently licnesed. License is required to continue."
+            New-LogMessage -Message "Windows is not currently licnesed. License is required to continue." -Severity Error
         }
     }#End Process
 
@@ -605,7 +789,6 @@ Function New-LogMessage{
     Begin{
         
         $LogPath = $ENV:SystemDrive + "\Windows\Temp\Windows10FeatureUpdate.log"
-        Write-Output $LogPath
 
         if (-NOT(Test-Path -Path $LogPath)){
             New-Item -Path $LogPath -Force | Out-Null
@@ -615,11 +798,19 @@ Function New-LogMessage{
     Process{
         $date = Get-Date -Format "dd-MM-yyyy HH:mm"
         $LogFormat = "$($date)  $($Severity)  $($message)"
-        
+    
     }#End Process
 
     End{
         Out-File -FilePath $LogPath -InputObject $LogFormat -Append
+
+        Switch($Severity)
+            {
+                "Information"{Write-Verbose $LogFormat; Break}
+                "Warning"{Write-Verbose $LogFormat; Break}
+                "Error"{Write-Error $LogFormat; Break}
+
+            }
     }#End End
 }#End Function New-LogMessage
 
