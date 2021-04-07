@@ -14,8 +14,8 @@
 
 #>
 
-If (-not ($PSVersionTable)) {Write-Warning 'PS1 Detected. PowerShell Version 2.0 or higher is required.';return}
-ElseIf ($PSVersionTable.PSVersion.Major -lt 3 ) {Write-Verbose 'PS2 Detected. PowerShell Version 3.0 or higher may be required for full functionality.'}
+If (-not ($PSVersionTable)) {New-LogMessage -Message 'PS1 Detected. PowerShell Version 2.0 or higher is required.' -Severity Warning;return}
+ElseIf ($PSVersionTable.PSVersion.Major -lt 3 ) {New-LogMessage -Message 'PS2 Detected. PowerShell Version 3.0 or higher may be required for full functionality.' -Severity Warning}
 
 
 #Module Version
@@ -23,12 +23,12 @@ $ModuleVersion = "1.0.0"
 $ModuleGuid='084a979b-91fd-45d9-b214-149bdfc168c7'
 
 If ($env:PROCESSOR_ARCHITEW6432 -match '64' -and [IntPtr]::Size -ne 8 -and $env:PROCESSOR_ARCHITEW6432 -ne 'ARM64') {
-    Write-Warning '32-bit PowerShell session detected on 64-bit OS. Attempting to launch 64-Bit session to process commands.'
+    New-LogMessage -Message '32-bit PowerShell session detected on 64-bit OS. Attempting to launch 64-Bit session to process commands.' -Severity Information
     $pshell="${env:windir}\SysNative\WindowsPowershell\v1.0\powershell.exe"
     If (!(Test-Path -Path $pshell)) {
         $pshell="${env:windir}\System32\WindowsPowershell\v1.0\powershell.exe"
         If ($Null -eq ([System.Management.Automation.PSTypeName]'Kernel32.Wow64').Type -or $Null -eq [Kernel32.Wow64].GetMethod('Wow64DisableWow64FsRedirection')) {
-            Write-Debug 'Loading WOW64Redirection functions'
+            New-LogMessage -Message 'Loading WOW64Redirection functions' -Severity Information
 
             Add-Type -Name Wow64 -Namespace Kernel32 -Debug:$False -MemberDefinition @"
 [DllImport("kernel32.dll", SetLastError=true)]
@@ -38,7 +38,7 @@ public static extern bool Wow64DisableWow64FsRedirection(ref IntPtr ptr);
 public static extern bool Wow64RevertWow64FsRedirection(ref IntPtr ptr);
 "@
         }
-        Write-Verbose 'System32 path is redirected. Disabling redirection.'
+        New-LogMessage -Message 'System32 path is redirected. Disabling redirection.' -Severity Information
         [ref]$ptr = New-Object System.IntPtr
         $Result = [Kernel32.Wow64]::Wow64DisableWow64FsRedirection($ptr)
         $FSRedirectionDisabled=$True
@@ -57,9 +57,9 @@ public static extern bool Wow64RevertWow64FsRedirection(ref IntPtr ptr);
     If ($Null -ne ([System.Management.Automation.PSTypeName]'Kernel32.Wow64').Type -and $Null -ne [Kernel32.Wow64].GetMethod('Wow64DisableWow64FsRedirection') -and $FSRedirectionDisabled -eq $True) {
         [ref]$defaultptr = New-Object System.IntPtr
         $Result = [Kernel32.Wow64]::Wow64RevertWow64FsRedirection($defaultptr)
-        Write-Verbose 'System32 path redirection has been re-enabled.'
+        New-LogMessage -Message 'System32 path redirection has been re-enabled.' -Severity Information
     }#End If
-    Write-Warning 'Exiting 64-bit session. Module will only remain loaded in native 64-bit PowerShell environment.'
+    New-LogMessage -Message 'Exiting 64-bit session. Module will only remain loaded in native 64-bit PowerShell environment.' -Severity Warning
     Exit $ExitResult
 }#End If
 
@@ -144,12 +144,12 @@ Param ()
 
 
     Begin{
-        Write-Debug "Creating PS hash table to store system information"
+        New-LogMessage -Message "Creating PS hash table to store system information" -Severity Information
     }#End Begin
 
     Process{
 
-        Write-Debug "Getting system version information"
+        New-LogMessage -Message "Getting system version information" -Severity Information
         Try{
             $SystemVerInfo = [System.Environment]::OSVersion.Version
             $MajorVersion = $SystemVerInfo.Major
@@ -158,17 +158,17 @@ Param ()
         }#End Try
         
         Catch{
-            Write-Error "ERROR: Line ($($LINENUM): Failed to retrieve version information"
+            New-LogMessage -Message "Failed to retrieve version information" -Severity Error
         }#End Catch
 
         Try{
-            Write-Debug "Getting System Name and OS"
+            New-LogMessage -Message "Getting System Name and OS" -Severity Information
             $ComputerName = [System.Net.DNS]::GetHostName()
             $OperatingSystem = (Get-WmiObject Win32_OperatingSystem).Caption
         }#End Try
 
         Catch{
-            Write-Error "ERROR: Line $($LINENUM): Failed to gather System name and OS"
+            New-LogMessage -Message "Failed to gather System name and OS" -Severity Error
         }#End Catch
 
     }#End Process
@@ -285,6 +285,8 @@ Function Update-Windows10Iso {
             if (-Not(Test-WindowsLicense)){
                 New-LogMessage -Message "Stopping script due to missing licnese." -Severity Error -ErrorAction Stop
             }
+            $OsInfo = Get-Windows10Info
+            New-LogMessage -Message "Current Build $($OsInfo.BuildNumber)"
         }#End Begin
 
         Process{
@@ -292,7 +294,7 @@ Function Update-Windows10Iso {
 
             If (Test-Path -Path $ISOPath){
                 If ((Get-ItemProperty $ISOPath).Extension -eq '.iso'){
-                    New-LogMessage -Message "ISO file successfully detected" -ErrorAction SilentlyContinue
+                    New-LogMessage -Message "ISO file successfully detected" -Severity Information
                     $FileName = (Get-ItemProperty $ISOPath).Name
                 } Else{
                     New-LogMessage -Message "File path $($ISOPath) is not using the correct file format. Looking for .iso" -Severity Error -ErrorAction Stop
@@ -304,7 +306,7 @@ Function Update-Windows10Iso {
 
             Try{
                 New-LogMessage -Message "Copying $($ISOPath) to $($ENV:Systemdrive)\Windows\Temp" -Severity Information
-                #Copy-Item -Path $ISOPath -Destination "$($ENV:Systemdrive)\Windows\Temp" -Force -ErrorAction Stop
+                Copy-Item -Path $ISOPath -Destination "$($ENV:Systemdrive)\Windows\Temp" -Force -ErrorAction Stop
             }
 
             Catch{
@@ -340,12 +342,67 @@ Function Update-Windows10Iso {
                 New-LogMessage -Message "Temp Directory not detected. Exiting script." -Severity Error -ErrorAction Stop
             }
 
+            Try{
+                New-LogMessage -Message "Dismounting Disk image." -Severity Information
+                Dismount-DiskImage -ImagePath "$($ENV:Systemdrive)\Windows\Temp\$FileName" | Out-Null
+            }
+            
+            Catch{
+                New-LogMessage -Message "Failed to dismount disk image" -Severity Error
+            }
 
+            New-LogMessage -Message "Launching installer." -Severity Information
+
+            Try{
+                $Install = Start-Process -FilePath "$($ENV:Systemdrive)\Windows\Temp\Windows10Feature\Setup.exe" -ArgumentList "/auto upgrade $($RebootArg) /Compat IgnoreWarning /DynamicUpdate disable $($CopyArgs)" -Wait -PassThru
+                $hex = "{0:x}" -f $install.ExitCode
+                $exit_code = "0x$hex"
+
+
+                $message = Switch ($exit_code) {
+                    "0xC1900210" { "SUCCESS: No compatibility issues detected"; break } 
+                    "0xC1900101" { "ERROR: Driver compatibility issue detected. https://docs.microsoft.com/en-us/windows/deployment/upgrade/resolution-procedures"; break }
+                    "0xC1900208" { "ERROR: Compatibility issue detected, unsupported programs:`r`n$incompatible_programs`r`n"; break }
+                    "0xC1900204" { "ERROR: Migration choice not available." ; break }
+                    "0xC1900200" { "ERROR: System not compatible with upgrade." ; break }
+                    "0xC190020E" { "ERROR: Insufficient disk space." ; break }
+                    "0x80070490" { "ERROR: General Windows Update failure, try the following troubleshooting steps`r`n- Run update troubleshooter`r`n- sfc /scannow`r`n- DISM.exe /Online /Cleanup-image /Restorehealth`r`n - Reset windows update components.`r`n"; break }
+                    "0xC1800118" { "ERROR: WSUS has downloaded content that it cannot use due to a missing decryption key."; break }
+                    "0x80090011" { "ERROR: A device driver error occurred during user data migration."; break }
+                    "0xC7700112" { "ERROR: Failure to complete writing data to the system drive, possibly due to write access failure on the hard disk."; break }
+                    "0xC1900201" { "ERROR: The system did not pass the minimum requirements to install the update."; break }
+                    "0x80240017" { "ERROR: The upgrade is unavailable for this edition of Windows."; break }
+                    "0x80070020" { "ERROR: The existing process cannot access the file because it is being used by another process."; break }
+                    "0xC1900107" { "ERROR: A cleanup operation from a previous installation attempt is still pending and a system reboot is required in order to continue the upgrade."; break }
+                    "0x3" { "SUCCESS: The upgrade started, no compatibility issues."; break }
+                    "0x5" { "ERROR: The compatibility check detected issues that require resolution before the upgrade can continue."; break }
+                    "0x7" { "ERROR: The installation option (upgrade or data only) was not available."; break }
+                    "0x0" { "SUCCESS: Upgrade started."; break }
+                    default { "WARNING: Unknown exit code."; break }
+                  }
+                
+                  if ($exit_code -eq "0xC1900210" -or $exit_code -eq "0x3" -or $exit_code -eq "0x0") {
+                      New-LogMessage -Message $message -Severity Information
+                      Start-Sleep -Seconds 300
+                      Restart-Computer -Force
+                    } else {
+                        New-LogMessage -Message $message -Severity Error
+                    }
+
+            }
+
+            Catch{
+                New-LogMessage -Message "Failed to start process. Error $($Error[0])"
+            }
 
             
         }#End Begin
 
-        End{}#End End
+        End{
+            Get-UpgradeSoftwareCompatibility
+            Get-UpgradeHardwareCompatibility
+            New-LogMessage -Message "Reached finish" -Severity Information
+        }#End End
 
 }
 
@@ -366,20 +423,19 @@ Param (
     [string]$UpdateTool = 'https://download.microsoft.com/download/2/b/b/2bba292a-21c3-42a6-8123-98265faff0b6/Windows10Upgrade9252.exe',
     [switch]$BackupUserProfile,
     [int]$FreeSpaceThreshold = 20,
-    [switch]$ISO,
     [string]$LogPath,
     [switch]$NoReboot
 )
 
     Begin{
         if ((Get-DiskSpace) -ge $FreeSpaceThreshold){
-            Write-Verbose "System disk check passed. Continuing with update"
+            New-LogMessage -Message "System disk check passed. Continuing with update" -Severity Information
         }Else{
-            Write-Error "ERROR: Line $($LINENUM): Not enough free disk space to continue." -ErrorAction Stop
+            New-LogMessage -Message "Not enough free disk space to continue." -Severity Error -ErrorAction Stop
         }
 
         if (-Not([string]::IsNullOrEmpty($LogPath))){
-            Write-Verbose "New log path $($LogPath) defined. Using destination for logging"
+            New-LogMessage -Message "New log path $($LogPath) defined. Using destination for logging" -Severity Information
             $CopyArg = [string]::Concat("/copylogs ", $LogPath)
             if(-Not(Test-Path $LogPath)){
                 New-Item -Path $LogPath -ItemType Directory -Force | Out-Null
@@ -391,21 +447,23 @@ Param (
         }
 
         if ($BackupUserProfile){
-            Write-Verbose "User Profile Backup switch set to true. Starting backup of profile"
+            New-LogMessage -Message "User Profile Backup switch set to true. Starting backup of profile" -Severity Information
             Backup-UserProfile
         }Else{
-            Write-Verbose "User Profile Backup switch set to false. Skipping backup of profile"
+            New-LogMessage -Message "User Profile Backup switch set to false. Skipping backup of profile" -Severity Information
         }
+        $OsInfo = Get-Windows10Info
+        New-LogMessage -Message "Current Build $($OsInfo.BuildNumber)"
     }
 
     Process{
         Try{
-            Write-Verbose "Creating temp directory at $($ENV:TEMP)\Windows10Update"
+            New-LogMessage -Message "Creating temp directory at $($ENV:TEMP)\Windows10Update" -Severity Information
             New-Item -Path $ENV:TEMP -Name "Windows10Update" -ItemType Directory -Force -ErrorAction Stop | Out-Null
         }
 
         Catch{
-            Write-Error "Failed to create temp directory to store update data" -ErrorAction Stop
+            New-LogMessage -Message "Failed to create temp directory to store update data" -Severity Error -ErrorAction Stop
         }
 
         Try{
@@ -413,33 +471,70 @@ Param (
         }
 
         Catch{
-            Write-Error "ERROR: Line ($($LINENUM): Failed to download file $($UpdateTool) $($Error[0])" -ErrorAction Stop
+            New-LogMessage -Message "Failed to download file $($UpdateTool) $($Error[0])" -Severity Error -ErrorAction Stop
         }
         Try{
             if (Test-Path ($ENV:TEMP + "\Windows10Update\updater.exe")){
-                Write-Verbose "Update utility successfully downloaded"
+                New-LogMessage -Message "Update utility successfully downloaded" -Severity Information
                 $InstallArg = "/quietinstall /skipeula /auto upgrade $($CopyArg) $($RebootArg)"
-                Write-Verbose "Issuing install command Update.exe $($InstallArg)"
+                New-LogMessage -Message "Issuing install command Update.exe $($InstallArg)" -Severity Information
                 Try{
-                    Write-Verbose "Invoking install now. This process can take several hours to complete"
-                    Start-Process -FilePath ($ENV:TEMP + "\Windows10Update\updater.exe") -ArgumentList $InstallArg
+                    New-LogMessage -Message "Invoking install now. This process can take several hours to complete" -Severity Information
+                    $install = Start-Process -FilePath ($ENV:TEMP + "\Windows10Update\updater.exe") -ArgumentList $InstallArg -Wait -PassThru
+                    
+                    $hex = "{0:x}" -f $install.ExitCode
+                    $exit_code = "0x$hex"
+
+
+                    $message = Switch ($exit_code) {
+                        "0xC1900210" { "SUCCESS: No compatibility issues detected"; break } 
+                        "0xC1900101" { "ERROR: Driver compatibility issue detected. https://docs.microsoft.com/en-us/windows/deployment/upgrade/resolution-procedures"; break }
+                        "0xC1900208" { "ERROR: Compatibility issue detected, unsupported programs:`r`n$incompatible_programs`r`n"; break }
+                        "0xC1900204" { "ERROR: Migration choice not available." ; break }
+                        "0xC1900200" { "ERROR: System not compatible with upgrade." ; break }
+                        "0xC190020E" { "ERROR: Insufficient disk space." ; break }
+                        "0x80070490" { "ERROR: General Windows Update failure, try the following troubleshooting steps`r`n- Run update troubleshooter`r`n- sfc /scannow`r`n- DISM.exe /Online /Cleanup-image /Restorehealth`r`n - Reset windows update components.`r`n"; break }
+                        "0xC1800118" { "ERROR: WSUS has downloaded content that it cannot use due to a missing decryption key."; break }
+                        "0x80090011" { "ERROR: A device driver error occurred during user data migration."; break }
+                        "0xC7700112" { "ERROR: Failure to complete writing data to the system drive, possibly due to write access failure on the hard disk."; break }
+                        "0xC1900201" { "ERROR: The system did not pass the minimum requirements to install the update."; break }
+                        "0x80240017" { "ERROR: The upgrade is unavailable for this edition of Windows."; break }
+                        "0x80070020" { "ERROR: The existing process cannot access the file because it is being used by another process."; break }
+                        "0xC1900107" { "ERROR: A cleanup operation from a previous installation attempt is still pending and a system reboot is required in order to continue the upgrade."; break }
+                        "0x3" { "SUCCESS: The upgrade started, no compatibility issues."; break }
+                        "0x5" { "ERROR: The compatibility check detected issues that require resolution before the upgrade can continue."; break }
+                        "0x7" { "ERROR: The installation option (upgrade or data only) was not available."; break }
+                        "0x0" { "SUCCESS: Upgrade started."; break }
+                        default { "WARNING: Unknown exit code."; break }
+                    }
+                
+                    if ($exit_code -eq "0xC1900210" -or $exit_code -eq "0x3" -or $exit_code -eq "0x0") {
+                        New-LogMessage -Message $message -Severity Information
+                        Start-Sleep -Seconds 300
+                        } else {
+                        New-LogMessage -Message $message -Severity Error
+                        }
+
                 }
 
                 Catch{
-                    Write-Error "ERROR: Line $($LINENUM): Failed to start install process. Error: $($Error[0])"
+                    New-LogMessage -Message "Failed to start install process. Error: $($Error[0])" -Severity Error
                 }
             }else{
-                Write-Error "ERROR: Line $($LINENUM): Failed to download Windows 10 Update Assistant"
+                New-LogMessage -Message "Failed to download Windows 10 Update Assistant. Error: $($Error[0])" -Severity Error
             }
         }
         
         Catch{
-            Write-Error "ERROR: Line $($LINENUM): An error occured while attempting to setup installer. ERROR: $($Error[0])"
+            New-LogMessage -Message "An error occured while attempting to setup installer. ERROR: $($Error[0])" -Severity Error
         }
 
     }
 
-    End{}
+    End{
+        Get-UpgradeSoftwareCompatibility
+        Get-UpgradeHardwareCompatibility
+    }
 }
 
 
@@ -499,12 +594,12 @@ Function Get-Win10Logs {
         )
 
         If ([string]::IsNullOrEmpty($Path)){
-            Write-Verbose "No path provided using current directory"
+            New-LogMessage -Message "No path provided using current directory" -Severity Information
             $Path = (Get-Location).Path 
         }
 
         $Path = [string]::Concat($Path, '\Win10UpdateLogs')
-        Write-Verbose "Setting path equal to $($Path)"
+        New-LogMessage -Message "Setting path equal to $($Path)" -Severity Information
     }
 
     Process{
@@ -514,25 +609,25 @@ Function Get-Win10Logs {
         }
 
         Catch{
-            Write-Error "ERROR: Line $($LINENUMB): Failed to create directory. $($Error[0])"
+            New-LogMessage -Message "Failed to create directory. $($Error[0])" -Severity Error
         }
 
         Try{
             foreach ($log in $UpdateLogs){
                 If (Test-path $log){
-                    Write-Verbose "Copying file $($log)"
+                    New-LogMessage -Message "Copying file $($log)" -Severity Information
                     Copy-Item $log -Destination $Path -Force | Out-Null
                 }
             }
         }
 
         Catch{
-            Write-Error "ERROR: Line $($LINENUM): Failed to copy all Success logs. $($Error[0])"
+            New-LogMessage -Message "ERROR: Line $($LINENUM): Failed to copy all Success logs. $($Error[0])" -Severity Error
         }
     }
 
     End{
-        Write-Verbose "Finished copying all logs."
+        New-LogMessage -Message "Finished copying all logs." -Severity Information
 
         If ($Zip){
             Compress-Archive -Path $Path -DestinationPath "$($Path)\Win10UpdateLogs.zip" -Force | Out-Null
@@ -590,7 +685,7 @@ Function Get-Windows10EventLogs {
     Param ()
 
     Begin{
-        Write-Verbose "Starting search for upgrade event logs."
+        New-LogMessage -Message "Starting search for upgrade event logs." -Severity Information
     }#End Begin
 
     Process{
@@ -600,7 +695,7 @@ Function Get-Windows10EventLogs {
         }
 
         Catch{
-            Write-Error "ERROR: Line $($LINEUM): Failed to retrieve event logs."
+            New-LogMessage -Message "ERROR: Line $($LINEUM): Failed to retrieve event logs." -Severity Error
         }
     }#End Process
 
@@ -632,7 +727,7 @@ Function Get-UpgradeHardwareCompatibility {
     }#End Begin
 
     Process{
-        Write-Verbose "Gathering hardware compatibility information"
+        New-LogMessage -Message "Gathering hardware compatibility information" -Severity Information
 
         Try{
             [xml]$compatreport = Get-ChildItem $ScanDir -ErrorAction Stop |
@@ -651,16 +746,16 @@ Function Get-UpgradeHardwareCompatibility {
         }
 
         Catch{
-            Write-Verbose "Unable to identify any incompatible hardware"
+            New-LogMessage -Message "Unable to identify any incompatible hardware" -Severity Information
             break
         }
     }#End Process
 
     End{
         If ($hw_issues.count -gt 0) {
-            Write-Error "ERROR: Incompatable Hardware found: $([string]::Join(", ", $hw_issues))"
+            New-LogMessage -Message "Incompatable Hardware found: $([string]::Join(", ", $hw_issues))" -Severity Error
         } Else {
-            Write-Verbose "No hardware compatibility issues found"
+            New-LogMessage -Message "No hardware compatibility issues found" -Severity Information
         }
     }#End End
 
@@ -690,7 +785,7 @@ Function Get-UpgradeSoftwareCompatibility {
     }#End Begin
 
     Process{
-        Write-Verbose "Gathering incompatible software"
+        New-LogMessage -Message "Gathering incompatible software" -Severity
 
         Try {
             [xml]$CompatReport = Get-ChildItem -Path $ScanDir -ErrorAction Stop |
@@ -702,16 +797,16 @@ Function Get-UpgradeSoftwareCompatibility {
         }
 
         Catch{
-            Write-Verbose "Unable to identify any incompatible software"
+            New-LogMessage -Message "Unable to identify any incompatible software" -Severity Information
             break
         }
     }#End Process
 
     End{
         If ($IncompatibleSoftware.count -gt 0) {
-            Write-Error "ERROR: Incompatable Software found: $([string]::Join(", ", $IncompatibleSoftware))"
+            New-LogMessage -Message "Incompatable Software found: $([string]::Join(", ", $IncompatibleSoftware))" -Severity Error
         } Else {
-            Write-Verbose "No incompatible software found"
+            New-LogMessage -Message "No incompatible software found" -Severity Information
         }
     }#End End
 
