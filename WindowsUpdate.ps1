@@ -785,7 +785,7 @@ Function Get-UpgradeSoftwareCompatibility {
     }#End Begin
 
     Process{
-        New-LogMessage -Message "Gathering incompatible software" -Severity Inormation
+        New-LogMessage -Message "Gathering incompatible software" -Severity Information
 
         Try {
             [xml]$CompatReport = Get-ChildItem -Path $ScanDir -ErrorAction Stop |
