@@ -203,7 +203,9 @@ Function Backup-UserProfile{
 [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
 Param ()
 
-    Begin{}
+    Begin{
+        Write-Output "This Function is currently under Development."
+    }
 
     Process{}
 
@@ -225,6 +227,7 @@ Function Get-DownloadSpeed{
 
 [CmdletBinding(SupportsShouldProcess=$True, ConfirmImpact='Low')]
 Param ()    
+Write-Output "This Function is currently under Development."
 }
 
 
@@ -656,6 +659,7 @@ Function Get-SetupDiag {
     Param ()
 
     Begin{
+        Write-Output "This Function is currently under Development."
         Try{
             if ($true){}
         }
