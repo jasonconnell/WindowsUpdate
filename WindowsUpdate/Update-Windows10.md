@@ -6,7 +6,7 @@ This function will attempt to fully automate the installation of Windows 10 feat
 ## SYNTAX
 
 ```
-Get-DownloadSpeed
+Update-Windows10
 ```
 
 ## DESCRIPTION
