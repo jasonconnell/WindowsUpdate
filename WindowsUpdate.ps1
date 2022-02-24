@@ -909,6 +909,163 @@ Function New-LogMessage{
     }#End End
 }#End Function New-LogMessage
 
+
+
+function Get-MissingUpdates{
+<#
+.SYNOPSIS
+    This function will gather all availible updates and write them to file.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  2/22/2022
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+    [CmdletBinding()]
+    Param(
+        [string]$Path = "$ENV:SystemDrive:\Windows\Temp\Missingpatches.txt"
+    )
+
+    Begin{
+        New-LogMessage -Message "Gathering missing Updates"
+    }
+    Process{
+        $UpdateObject = New-Object -ComObject Microsoft.Update.Session
+        $UpdateSearcher = $UpdateObject.CreateupdateSearcher()
+        $Updates = @($UpdateSearcher.Search("IsHidden=0 and IsInstalled=0").Updates)
+        $Updates | Select-Object Title,RebootRequired,SupportURL | Format-List > $Path
+    }
+    End{
+        New-LogMessage -Message "Missing Updates list: $Path" -Severity Information
+    }
+
+}
+Function Import-WindowsUpdateModule {
+<#
+.SYNOPSIS
+    This function will install the Windows Update module.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  2/22/2022
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+    [CmdletBinding()]
+    Param()
+    
+
+    Begin{
+        New-LogMessage -Message "Installing Package Provider NuGet" -Severity Information
+
+    }
+    Process{
+        New-LogMessage -Message "Testing if NuGet Package provider is installed. If missing it will be installed" -Severity Information
+        Get-PackageProvider -Name Nuget -ForceBootstrap | Out-Null
+
+        New-LogMessage -Message "Setting PSGallery as a trusted source" -Severity Information
+        Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+
+        New-LogMessage -Message "Installing PSWindowsUpdate Module" -Severity Information
+        Install-Module -Name PSWindowsUpdate
+    }
+    End{
+        New-LogMessage -Message "PSWindowsUpdate is now installed" -Severity Information
+    }
+}
+
+Function Remove-WindowsUpdateModule{
+<#
+.SYNOPSIS
+    This function will Remove the Windows Update module.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  2/22/2022
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>    
+
+    [CmdletBinding()]
+    Param()
+
+    Begin{
+        New-LogMessage -Message "Begining removal of PSWindowsUpdate Module" -Severity Information
+    }
+    Process{
+        Remove-Module -Name PSWindowsUpdate
+        Uninstall-Module -Name PSWindowsUpdate -Force -ErrorAction SilentlyContinue
+        
+        New-LogMessage -Message "Reverting PSRepository settings" -Severity Information
+        Set-PSRepository -Name 'PSGallery' -InstallationPolicy Untrusted
+
+    }
+    End{
+        New-LogMessage -Message "PSWindows Update Module has been removed."
+    }
+
+}
+
+
+Function Invoke-WindowsUpdates{
+<#
+.SYNOPSIS
+    This function will install all availible Windows Updates.
+
+.NOTES
+    Version:        1.0
+    Author:         Jason Connell
+    Creation Date:  2/22/2022
+    Purpose/Change: Initial script development
+    
+.LINK
+    https://github.com/jasonconnell/WindowsUpdate/blob/main/README.md
+#>
+    [CmdletBinding()]
+
+    Param(
+        [switch]$reboot
+    )
+
+    Begin{
+        # Setup Directory to store update history
+        New-LogMessage -Message "Creating folder directory $ENV:SystemDrive\AutoUpdates\History" -Severity Information
+        New-Item -Path "$ENV:SystemDrive\AutoUpdates\History" -ItemType Directory -Force | Out-Null
+
+        New-LogMessage -Message "Importing Udate module" -Severity Information
+        Import-WindowsUpdateModule
+    }
+
+    Process{
+        New-LogMessage -Message "Querying all availible upates and storing in $ENV:SystemDrive\AutoUpdates\History\" -Severity Information
+        Get-WindowsUpdate | Out-File $ENV:SystemDrive:\AutoUpdates\History\Updates_"$((Get-Date).ToString('dd-MM-yyyy_HH.mm.ss'))".txt
+        if ($reboot){
+            Install-WindowsUpdate -Install -AcceptAll -AutoReboot
+        }else{
+            Install-WindowsUpdate -Install -AcceptAll 
+        }
+    }
+
+    End{
+        New-LogMessage -Message "Finished installing all availible updates" -Severity Information
+        New-LogMessage -Message "Removing PSWindowsUpdate Module"
+        Remove-WindowsUpdateModule
+    }
+
+
+}
+
+
 $PublicFunctions=@(((@"
 Get-SetupDiag
 Get-Win10Logs
@@ -917,4 +1074,8 @@ Get-DownloadSpeed
 Backup-UserProfile
 Get-SystemHashTable
 Get-DiskSpace
+Invoke-WindowsUpdate
+Import-WindowsUpdateModule
+Remove-WindowsUpdateModule
+Get-MissingUpdates
 "@) -replace "[`r`n,\s]+",',') -split ',')

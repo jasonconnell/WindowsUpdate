@@ -18,4 +18,12 @@ This powershell module attempts to ease the pain of Windows 10 feature updates b
 
 [Get-SetupDiag](WindowsUpdate/Get-SetupDiag.md)
 
-[Get-Windows10EventLogs](WindowsUpdate/Get-WindowsEventLogs)
+[Get-Windows10EventLogs](WindowsUpdate/Get-WindowsEventLogs.md)
+
+[Get-MissingUpdates](WindowsUpdate/Get-MissingUpdates.md)
+
+[Import-WindowsUpdateModule](WindowsUpdate/Import-WindowsUpdateModule.md)
+
+[Remove-WindowsUpdateModule](WindowsUpdate/Remove-WindowsUpdateModule.md)
+
+[Invoke-WindowsUpdates](WindowsUpdate/Invoke-WindowsUpdates.md)
